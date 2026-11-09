@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pathfinder Media Board - Retro 4chan Style</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        chan: {
+                            bg: '#EEF2FF',         /* Soft retro light blue background */
+                            card: '#DCE6F1',       /* Thread card background */
+                            header: '#B0C4DE',     /* Light steel blue header */
+                            accent: '#336699',     /* Classic blue header text & borders */
+                            red: '#CC1111',        /* Anonymous / Alert red */
+                            hover: '#C8D7E6',
+                            border: '#A2B9D3'
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['Courier New', 'Courier', 'monospace'],
+                        sans: ['Tahoma', 'Verdana', 'Arial', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #EEF2FF;
+            color: #000000;
+            font-family: Tahoma, Verdana, Arial, sans-serif;
+            font-size: 13px;
+        }
+        /* Custom scrollbars for retro feel */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #DCE6F1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #B0C4DE;
+            border: 1px solid #336699;
+        }
+        .board-border {
+            border: 1px solid #A2B9D3;
+        }
+        .chan-btn {
+            background-color: #DCE6F1;
+            border: 1px solid #336699;
+            color: #336699;
+            font-weight: bold;
+            padding: 2px 8px;
+            font-size: 11px;
+            transition: all 0.15s ease-in-out;
+        }
+        .chan-btn:hover {
+            background-color: #336699;
+            color: #FFFFFF;
+        }
+        .chan-input {
+            background-color: #FFFFFF;
+            border: 1px solid #A2B9D3;
+            padding: 4px 6px;
+            font-size: 12px;
+            color: #000;
+        }
+        .chan-input:focus {
+            outline: None;
+            border-color: #336699;
+        }
+    </style>
+</head>
+<body class="min-h-screen pb-12 select-none" oncontextmenu="return false;" ondragstart="return false;">
+
+    <!-- Top Announcement / Banner Header -->
+    <header class="bg-chan-header border-b border-chan-accent text-chan-accent py-2 px-4 shadow-sm">
+        <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-2">
+            <div class="flex items-center gap-3">
+                <i class="fa-solid fa-folder-tree text-lg"></i>
+                <h1 class="font-bold text-base tracking-wide font-mono">Media Archive Board</h1>
+                <span class="text-xs bg-chan-bg px-2 py-0.5 rounded border border-chan-accent text-gray-700 hidden sm:inline">v3.1 retro-blue</span>
+            </div>
+            
+            <div class="flex items-center gap-2 text-xs">
+                <span id="stats-counter" class="font-mono text-gray-800">Media: 0 items</span>
+                <span class="text-gray-400">|</span>
+                <button onclick="openAddModal()" class="chan-btn"><i class="fa-solid fa-plus mr-1"></i>New Entry</button>
+                <button onclick="fetchGitHubMedia()" class="chan-btn"><i class="fa-solid fa-arrows-rotate mr-1"></i>Sync Media</button>
+                <button onclick="clearAllData()" class="chan-btn bg-red-100 hover:bg-red-600"><i class="fa-solid fa-trash-can mr-1"></i>Clear Storage</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation & Fetch Controls -->
+    <nav class="max-w-7xl mx-auto my-4 px-4">
+        <div class="bg-chan-card p-3 board-border rounded-sm flex flex-col md:flex-row justify-between items-center gap-3">
+            <!-- Fetch Controls (No visible repository names) -->
+            <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                <button onclick="fetchGitHubMedia()" id="fetch-btn" class="chan-btn py-1.5 px-3 text-xs">
+                    <i class="fa-solid fa-cloud-arrow-down mr-1.5"></i>Fetch Pathfinder Media
+                </button>
+            </div>
+
+            <!-- View Toggles & Search -->
+            <div class="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
+                <div class="relative flex-grow sm:flex-grow-0">
+                    <input type="text" id="search-input" onkeyup="filterMedia()" placeholder="Search metadata / name..." class="chan-input w-full sm:w-64 pl-7 text-xs">
+                    <i class="fa-solid fa-magnifying-glass absolute left-2 top-2 text-gray-400 text-xs"></i>
+                </div>
+                
+                <div class="flex border border-chan-accent rounded overflow-hidden">
+                    <button id="grid-view-btn" onclick="setViewMode('grid')" class="px-3 py-1 bg-chan-accent text-white text-xs font-bold">
+                        <i class="fa-solid fa-th-large mr-1"></i>Grid
+                    </button>
+                    <button id="list-view-btn" onclick="setViewMode('list')" class="px-3 py-1 bg-chan-card text-chan-accent text-xs font-bold hover:bg-chan-hover">
+                        <i class="fa-solid fa-list mr-1"></i>Thread List
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Container -->
+    <main class="max-w-7xl mx-auto px-4">
+        
+        <!-- Status Notification Box -->
+        <div id="status-banner" class="hidden mb-4 p-3 bg-blue-100 border border-blue-400 text-blue-900 rounded text-xs flex justify-between items-center">
+            <span id="status-message">Loading repository contents...</span>
+            <button onclick="document.getElementById('status-banner').classList.add('hidden')" class="font-bold text-blue-900">&times;</button>
+        </div>
+
+        <!-- Grid Container -->
+        <div id="media-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- Dynamic Post Cards will render here -->
+        </div>
+
+        <!-- Empty State Fallback -->
+        <div id="empty-state" class="text-center py-16 bg-chan-card board-border my-6">
+            <i class="fa-regular fa-folder-open text-5xl text-chan-accent opacity-50 mb-3"></i>
+            <h3 class="font-bold text-lg text-chan-accent">No Media Loaded</h3>
+            <p class="text-xs text-gray-600 mt-1">Click <strong>"Fetch Pathfinder Media"</strong> to load real files from the repository archive or create a custom entry.</p>
+            <button onclick="fetchGitHubMedia()" class="chan-btn mt-4 px-4 py-2 text-xs"><i class="fa-solid fa-cloud-arrow-down mr-1"></i>Fetch Pathfinder Media</button>
+        </div>
+    </main>
+
+    <!-- Lightbox Preview Modal -->
+    <div id="lightbox-modal" class="fixed inset-0 bg-black bg-opacity-80 z-50 hidden flex items-center justify-center p-4">
+        <div class="relative max-w-4xl max-h-[90vh] w-full bg-chan-bg board-border p-2 flex flex-col items-center">
+            <div class="w-full flex justify-between items-center bg-chan-header px-3 py-1 mb-2 border-b border-chan-accent">
+                <span id="lightbox-title" class="font-mono text-xs font-bold text-chan-accent truncate">File Viewer</span>
+                <button onclick="closeLightbox()" class="text-chan-accent font-bold hover:text-red-600 text-base">&times; Close</button>
+            </div>
+            <div id="lightbox-content" class="w-full flex justify-center items-center overflow-auto max-h-[80vh]">
+                <!-- Media dynamically inserted -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit/Add Item Modal -->
+    <div id="edit-modal" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-chan-bg board-border max-w-lg w-full p-4 shadow-xl my-8">
+            <div class="bg-chan-header px-3 py-1.5 border-b border-chan-accent flex justify-between items-center -mx-4 -mt-4 mb-4">
+                <h3 id="modal-heading" class="font-bold font-mono text-chan-accent text-sm"><i class="fa-solid fa-pen-to-square mr-1"></i> Edit Media Metadata</h3>
+                <button onclick="closeEditModal()" class="text-chan-accent font-bold hover:text-red-600">&times;</button>
+            </div>
+
+            <form id="media-form" onsubmit="handleFormSubmit(event)" class="space-y-3 text-xs">
+                <input type="hidden" id="edit-id">
+
+                <div>
+                    <label class="block text-chan-accent font-bold mb-1">Title / Name</label>
+                    <input type="text" id="edit-title" required class="chan-input w-full" placeholder="e.g. Map Route Image">
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-chan-accent font-bold mb-1">Media Type</label>
+                        <select id="edit-type" class="chan-input w-full">
+                            <option value="image">Image (JPG, PNG, SVG)</option>
+                            <option value="video">Video (MP4, WebM)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-chan-accent font-bold mb-1">File Size & Res</label>
+                        <input type="text" id="edit-size" class="chan-input w-full" placeholder="e.g. 1.4 MB (1920x1080)">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-chan-accent font-bold mb-1">Media Direct URL</label>
+                    <input type="url" id="edit-url" required class="chan-input w-full" placeholder="https://...">
+                </div>
+
+                <div class="border-t border-chan-border pt-2 mt-2 font-bold text-chan-accent">Uploader Details</div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-gray-700 mb-1">Person Name</label>
+                        <input type="text" id="edit-uploader" class="chan-input w-full" placeholder="Anonymous / Person Name">
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-1">Avatar Image URL</label>
+                        <input type="url" id="edit-avatar" class="chan-input w-full" placeholder="https://...">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-gray-700 mb-1">Date Uploaded</label>
+                        <input type="date" id="edit-date" class="chan-input w-full">
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-1">Contact (Email/Phone)</label>
+                        <input type="text" id="edit-contact" class="chan-input w-full" placeholder="user@example.com">
+                    </div>
+                </div>
+
+                <div class="border-t border-chan-border pt-2 mt-2 font-bold text-chan-accent">Location Info</div>
+
+                <div>
+                    <label class="block text-gray-700 mb-1">Address / Location</label>
+                    <input type="text" id="edit-address" class="chan-input w-full" placeholder="e.g. San Francisco, CA">
+                </div>
+
+                <div>
+                    <label class="block text-gray-700 mb-1">Notes / Description</label>
+                    <textarea id="edit-notes" rows="2" class="chan-input w-full" placeholder="Additional details..."></textarea>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2 border-t border-chan-border">
+                    <button type="button" onclick="closeEditModal()" class="chan-btn bg-gray-200 text-gray-700">Cancel</button>
+                    <button type="submit" class="chan-btn bg-chan-accent text-white"><i class="fa-solid fa-floppy-disk mr-1"></i> Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Application Script Logic -->
+    <script>
+        // NO fake images or hardcoded initial items
+        let mediaItems = [];
+        let deletedItemIds = [];
+        let viewMode = 'grid'; // 'grid' or 'list'
+        
+        // Hardcoded repository details kept inside JavaScript only
+        const REPO_OWNER = 'prakharrpatel';
+        const REPO_NAME = 'pathfinder';
+
+        // Initialization
+        window.onload = function() {
+            loadLocalItems();
+            renderMedia();
+        };
+
+        // Load items from localStorage
+        function loadLocalItems() {
+            try {
+                const storedDeleted = localStorage.getItem('pathfinder_deleted_ids');
+                deletedItemIds = storedDeleted ? JSON.parse(storedDeleted) : [];
+            } catch(e) {
+                deletedItemIds = [];
+            }
+
+            const stored = localStorage.getItem('pathfinder_chan_media');
+            if (stored) {
+                try {
+                    const parsed = JSON.parse(stored);
+                    mediaItems = parsed.filter(item => !deletedItemIds.includes(String(item.id)));
+                } catch (e) {
+                    console.error('Error parsing stored media', e);
+                    mediaItems = [];
+                }
+            } else {
+                mediaItems = [];
+            }
+        }
+
+        function saveLocalItems() {
+            localStorage.setItem('pathfinder_chan_media', JSON.stringify(mediaItems));
+            localStorage.setItem('pathfinder_deleted_ids', JSON.stringify(deletedItemIds));
+            updateStats();
+        }
+
+        function clearAllData() {
+            if (confirm('Clear all stored media items and reset deleted item filters?')) {
+                deletedItemIds = [];
+                mediaItems = [];
+                localStorage.removeItem('pathfinder_chan_media');
+                localStorage.removeItem('pathfinder_deleted_ids');
+                renderMedia();
+                showStatus('All local storage data cleared.');
+            }
+        }
+
+        function updateStats() {
+            document.getElementById('stats-counter').innerText = `Media: ${mediaItems.length} items`;
+        }
+
+        function showStatus(msg) {
+            const banner = document.getElementById('status-banner');
+            const msgEl = document.getElementById('status-message');
+            msgEl.innerText = msg;
+            banner.classList.remove('hidden');
+        }
+
+        // Recursive directory search for media files via GitHub REST API
+        async function fetchRepoTree(path = '') {
+            const url = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}`;
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP Error ${response.status}`);
+            }
+            const contents = await response.json();
+            let results = [];
+
+            if (Array.isArray(contents)) {
+                for (const item of contents) {
+                    if (item.type === 'file') {
+                        results.push(item);
+                    } else if (item.type === 'dir') {
+                        // Recursively fetch subdirectories
+                        try {
+                            const subFiles = await fetchRepoTree(item.path);
+                            results = results.concat(subFiles);
+                        } catch(e) {
+                            console.warn(`Could not read subdirectory ${item.path}`, e);
+                        }
+                    }
+                }
+            }
+            return results;
+        }
+
+        // Fetch Media dynamically from fixed GitHub repository
+        async function fetchGitHubMedia() {
+            const fetchBtn = document.getElementById('fetch-btn');
+
+            fetchBtn.disabled = true;
+            fetchBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i>Scanning Repository...`;
+            showStatus(`Connecting to media repository archive...`);
+
+            try {
+                const files = await fetchRepoTree('');
+                let fetchedCount = 0;
+
+                files.forEach((file) => {
+                    const ext = file.name.split('.').pop().toLowerCase();
+                    const isImg = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'].includes(ext);
+                    const isVid = ['mp4', 'webm', 'ogg'].includes(ext);
+                    const generatedId = 'gh-' + btoa(file.path || file.name).replace(/=/g, '');
+
+                    if (isImg || isVid) {
+                        // Construct direct raw GitHub usercontent URL
+                        const rawUrl = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/main/${file.path}`;
+                        
+                        const isDeleted = deletedItemIds.includes(generatedId);
+                        const exists = mediaItems.some(item => item.url === rawUrl || String(item.id) === generatedId);
+                        
+                        if (!exists && !isDeleted) {
+                            fetchedCount++;
+                            mediaItems.unshift({
+                                id: generatedId,
+                                title: file.name,
+                                type: isImg ? 'image' : 'video',
+                                url: rawUrl,
+                                size: file.size ? formatBytes(file.size) : 'File',
+                                date: new Date().toISOString().split('T')[0],
+                                uploader: 'Archive Contributor',
+                                avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
+                                address: `Path: /${file.path}`,
+                                contact: `contributor@archive.org`,
+                                notes: `Discovered file located in archive directory.`
+                            });
+                        }
+                    }
+                });
+
+                saveLocalItems();
+                renderMedia();
+                
+                if (fetchedCount > 0) {
+                    showStatus(`Successfully imported ${fetchedCount} media files from repository!`);
+                } else if (files.length > 0) {
+                    showStatus(`Scanned repository (${files.length} total files), but no new un-deleted images/videos were found.`);
+                } else {
+                    showStatus(`No media files detected in repository tree.`);
+                }
+            } catch (err) {
+                console.error(err);
+                showStatus(`Unable to fetch repository media (${err.message}). You can add entries manually using 'New Entry'.`);
+            } finally {
+                fetchBtn.disabled = false;
+                fetchBtn.innerHTML = `<i class="fa-solid fa-cloud-arrow-down mr-1"></i>Fetch Pathfinder Media`;
+            }
+        }
+
+        // Render Cards according to viewMode & filters
+        function renderMedia() {
+            const container = document.getElementById('media-container');
+            const emptyState = document.getElementById('empty-state');
+            const searchVal = document.getElementById('search-input').value.toLowerCase();
+
+            const filtered = mediaItems.filter(item => {
+                return !deletedItemIds.includes(String(item.id)) && (
+                       item.title.toLowerCase().includes(searchVal) ||
+                       item.uploader.toLowerCase().includes(searchVal) ||
+                       item.notes.toLowerCase().includes(searchVal) ||
+                       item.address.toLowerCase().includes(searchVal));
+            });
+
+            if (filtered.length === 0) {
+                container.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                updateStats();
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+
+            if (viewMode === 'list') {
+                container.className = "flex flex-col gap-3";
+            } else {
+                container.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4";
+            }
+
+            container.innerHTML = filtered.map(item => {
+                const mapLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.address)}`;
+                
+                if (viewMode === 'list') {
+                    return `
+                    <div class="bg-chan-card board-border p-3 flex flex-col md:flex-row gap-3">
+                        <div class="w-full md:w-48 h-36 flex-shrink-0 bg-gray-200 border border-chan-border overflow-hidden relative cursor-pointer group" onclick="openLightbox('${item.id}')">
+                            ${item.type === 'video' ? `
+                                <video src="${item.url}" class="w-full h-full object-cover" ondragstart="return false;"></video>
+                                <div class="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center text-white text-2xl group-hover:scale-110 transition"><i class="fa-solid fa-play-circle"></i></div>
+                            ` : `
+                                <img src="${item.url}" alt="${item.title}" class="w-full h-full object-cover group-hover:scale-105 transition" onerror="this.src='https://placehold.co/400x300/DCE6F1/336699?text=Image+Unavailable'" ondragstart="return false;"/>
+                            `}
+                        </div>
+                        <div class="flex-grow flex flex-col justify-between text-xs">
+                            <div>
+                                <div class="flex flex-wrap items-center justify-between border-b border-chan-border pb-1 mb-2">
+                                    <span class="font-bold text-chan-red font-mono">${item.title}</span>
+                                    <span class="text-gray-600 font-mono text-[11px]">${item.date}</span>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 mb-2">
+                                    <div class="flex items-center gap-1.5">
+                                        <img src="${item.avatar}" class="w-4 h-4 rounded-full border border-chan-accent" onerror="this.src='https://placehold.co/50x50/B0C4DE/336699?text=U'" ondragstart="return false;"/>
+                                        <span class="font-bold text-gray-800">${item.uploader}</span>
+                                    </div>
+                                    <div><i class="fa-solid fa-hard-drive mr-1 text-chan-accent"></i>${item.size}</div>
+                                    <div class="sm:col-span-2 truncate"><i class="fa-solid fa-location-dot mr-1 text-chan-accent"></i><a href="${mapLink}" target="_blank" rel="noopener" class="underline hover:text-chan-accent">${item.address}</a></div>
+                                </div>
+                                <p class="text-gray-700 italic border-l-2 border-chan-accent pl-2 py-0.5">${item.notes || 'No description added.'}</p>
+                            </div>
+                            <div class="flex justify-end gap-2 mt-3 pt-1 border-t border-chan-border">
+                                <button onclick="openLightbox('${item.id}')" class="chan-btn"><i class="fa-solid fa-expand mr-1"></i>View</button>
+                                <button onclick="editMedia('${item.id}')" class="chan-btn"><i class="fa-solid fa-pen mr-1"></i>Edit</button>
+                                <button onclick="deleteMedia('${item.id}')" class="chan-btn bg-red-100 hover:bg-red-600 text-red-800"><i class="fa-solid fa-trash mr-1"></i>Delete</button>
+                            </div>
+                        </div>
+                    </div>`;
+                }
+
+                // 4chan Grid Post Card Style
+                return `
+                <div class="bg-chan-card board-border flex flex-col justify-between shadow-sm hover:border-chan-accent transition">
+                    <!-- Header Bar -->
+                    <div class="bg-chan-header px-3 py-1 border-b border-chan-accent flex justify-between items-center text-xs">
+                        <span class="font-bold text-chan-accent font-mono truncate max-w-[200px]" title="${item.title}">${item.title}</span>
+                        <span class="text-[10px] text-gray-700 font-mono">${item.date}</span>
+                    </div>
+
+                    <!-- Media Thumbnail Container -->
+                    <div class="p-2">
+                        <div class="w-full h-48 bg-white border border-chan-border overflow-hidden relative cursor-pointer group" onclick="openLightbox('${item.id}')">
+                            ${item.type === 'video' ? `
+                                <video src="${item.url}" class="w-full h-full object-cover" ondragstart="return false;"></video>
+                                <div class="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center text-white text-3xl group-hover:scale-110 transition"><i class="fa-solid fa-circle-play"></i></div>
+                            ` : `
+                                <img src="${item.url}" alt="${item.title}" class="w-full h-full object-cover group-hover:scale-105 transition" onerror="this.src='https://placehold.co/400x300/DCE6F1/336699?text=Image+Unavailable'" ondragstart="return false;"/>
+                            `}
+                        </div>
+                    </div>
+
+                    <!-- Detailed Meta Info Box -->
+                    <div class="px-3 py-2 text-xs space-y-1.5 border-t border-chan-border bg-chan-bg mx-2 mb-2 border">
+                        <div class="flex items-center justify-between pb-1 border-b border-gray-200">
+                            <div class="flex items-center gap-1.5 truncate">
+                                <img src="${item.avatar}" class="w-5 h-5 rounded-full border border-chan-accent object-cover flex-shrink-0" onerror="this.src='https://placehold.co/50x50/B0C4DE/336699?text=U'" ondragstart="return false;"/>
+                                <span class="font-bold text-chan-red truncate">${item.uploader}</span>
+                            </div>
+                            <span class="text-[11px] text-gray-500 font-mono">${item.size}</span>
+                        </div>
+
+                        <div class="text-[11px] text-gray-700 space-y-1">
+                            <div class="truncate">
+                                <i class="fa-solid fa-location-dot text-chan-accent w-4"></i>
+                                <a href="${mapLink}" target="_blank" rel="noopener" class="underline hover:text-chan-accent" title="Open in Google Maps">
+                                    ${item.address}
+                                </a>
+                            </div>
+                            <div class="truncate">
+                                <i class="fa-solid fa-envelope text-chan-accent w-4"></i>
+                                <span>${item.contact || 'N/A'}</span>
+                            </div>
+                            <p class="text-[11px] text-gray-600 italic bg-white p-1 rounded border border-gray-200 mt-1 line-clamp-2" title="${item.notes}">
+                                "${item.notes || 'No description.'}"
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Footer Action Buttons -->
+                    <div class="bg-chan-card px-3 py-2 border-t border-chan-border flex justify-between items-center text-xs">
+                        <a href="${mapLink}" target="_blank" class="chan-btn text-[10px]">
+                            <i class="fa-solid fa-map-location-dot mr-1"></i>Maps
+                        </a>
+                        <div class="flex gap-1">
+                            <button onclick="openLightbox('${item.id}')" class="chan-btn"><i class="fa-solid fa-eye"></i></button>
+                            <button onclick="editMedia('${item.id}')" class="chan-btn"><i class="fa-solid fa-pen"></i></button>
+                            <button onclick="deleteMedia('${item.id}')" class="chan-btn bg-red-100 hover:bg-red-600 text-red-800"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+
+            updateStats();
+        }
+
+        // View Mode Switcher
+        function setViewMode(mode) {
+            viewMode = mode;
+            const gridBtn = document.getElementById('grid-view-btn');
+            const listBtn = document.getElementById('list-view-btn');
+
+            if (mode === 'grid') {
+                gridBtn.className = "px-3 py-1 bg-chan-accent text-white text-xs font-bold";
+                listBtn.className = "px-3 py-1 bg-chan-card text-chan-accent text-xs font-bold hover:bg-chan-hover";
+            } else {
+                listBtn.className = "px-3 py-1 bg-chan-accent text-white text-xs font-bold";
+                gridBtn.className = "px-3 py-1 bg-chan-card text-chan-accent text-xs font-bold hover:bg-chan-hover";
+            }
+            renderMedia();
+        }
+
+        function filterMedia() {
+            renderMedia();
+        }
+
+        // CRUD Operations
+        function openAddModal() {
+            document.getElementById('modal-heading').innerText = 'Add New Media Item';
+            document.getElementById('edit-id').value = '';
+            document.getElementById('media-form').reset();
+            document.getElementById('edit-date').value = new Date().toISOString().split('T')[0];
+            document.getElementById('edit-modal').classList.remove('hidden');
+        }
+
+        function editMedia(id) {
+            const item = mediaItems.find(i => String(i.id) === String(id));
+            if (!item) return;
+
+            document.getElementById('modal-heading').innerText = 'Edit Media Metadata';
+            document.getElementById('edit-id').value = item.id;
+            document.getElementById('edit-title').value = item.title || '';
+            document.getElementById('edit-type').value = item.type || 'image';
+            document.getElementById('edit-size').value = item.size || '';
+            document.getElementById('edit-url').value = item.url || '';
+            document.getElementById('edit-uploader').value = item.uploader || '';
+            document.getElementById('edit-avatar').value = item.avatar || '';
+            document.getElementById('edit-date').value = item.date || '';
+            document.getElementById('edit-contact').value = item.contact || '';
+            document.getElementById('edit-address').value = item.address || '';
+            document.getElementById('edit-notes').value = item.notes || '';
+
+            document.getElementById('edit-modal').classList.remove('hidden');
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-modal').classList.add('hidden');
+        }
+
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            const id = document.getElementById('edit-id').value;
+
+            const newItem = {
+                id: id || 'item-' + Date.now(),
+                title: document.getElementById('edit-title').value.trim(),
+                type: document.getElementById('edit-type').value,
+                size: document.getElementById('edit-size').value.trim() || 'Unknown Size',
+                url: document.getElementById('edit-url').value.trim(),
+                uploader: document.getElementById('edit-uploader').value.trim() || 'Anonymous',
+                avatar: document.getElementById('edit-avatar').value.trim() || 'https://placehold.co/50x50/B0C4DE/336699?text=U',
+                date: document.getElementById('edit-date').value || new Date().toISOString().split('T')[0],
+                contact: document.getElementById('edit-contact').value.trim(),
+                address: document.getElementById('edit-address').value.trim() || 'Unspecified Location',
+                notes: document.getElementById('edit-notes').value.trim()
+            };
+
+            if (id) {
+                const index = mediaItems.findIndex(i => String(i.id) === String(id));
+                if (index !== -1) {
+                    mediaItems[index] = newItem;
+                } else {
+                    mediaItems.unshift(newItem);
+                }
+            } else {
+                mediaItems.unshift(newItem);
+            }
+
+            saveLocalItems();
+            renderMedia();
+            closeEditModal();
+        }
+
+        function deleteMedia(id) {
+            const targetId = String(id);
+            if (!deletedItemIds.includes(targetId)) {
+                deletedItemIds.push(targetId);
+            }
+            mediaItems = mediaItems.filter(i => String(i.id) !== targetId);
+            saveLocalItems();
+            renderMedia();
+        }
+
+        // Lightbox Modal Functions
+        function openLightbox(id) {
+            const item = mediaItems.find(i => String(i.id) === String(id));
+            if (!item) return;
+
+            const lightbox = document.getElementById('lightbox-modal');
+            const titleEl = document.getElementById('lightbox-title');
+            const contentEl = document.getElementById('lightbox-content');
+
+            titleEl.innerText = `${item.title} (${item.size})`;
+
+            if (item.type === 'video') {
+                contentEl.innerHTML = `
+                    <video controls autoplay class="max-h-[75vh] w-auto border border-chan-accent" ondragstart="return false;">
+                        <source src="${item.url}" type="video/mp4">
+                        Your browser does not support video playback.
+                    </video>`;
+            } else {
+                contentEl.innerHTML = `
+                    <img src="${item.url}" alt="${item.title}" class="max-h-[75vh] w-auto object-contain border border-chan-accent" ondragstart="return false;" onerror="this.src='https://placehold.co/800x600/DCE6F1/336699?text=Failed+to+load+image'"/>`;
+            }
+
+            lightbox.classList.remove('hidden');
+        }
+
+        function closeLightbox() {
+            const lightbox = document.getElementById('lightbox-modal');
+            const contentEl = document.getElementById('lightbox-content');
+            contentEl.innerHTML = '';
+            lightbox.classList.add('hidden');
+        }
+
+        // Utility: Format File Bytes
+        function formatBytes(bytes, decimals = 1) {
+            if (!bytes || bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html>
